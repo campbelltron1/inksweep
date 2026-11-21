@@ -213,6 +213,8 @@ def resolve_device(name: str) -> str:
     mps = getattr(torch.backends, "mps", None)
     if mps is not None and mps.is_available():
         return "mps"
+    LOG.warning("--device auto: no CUDA or Apple GPU is visible, so this runs on the CPU (slow); "
+                "pass --device cpu to choose that, or --device cuda to fail instead")
     return "cpu"
 
 

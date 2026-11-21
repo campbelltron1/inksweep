@@ -97,3 +97,28 @@ def test_histograms_match_numpy_for_skewed_patches(device):
     flat[2, :4000] = 17
     ref = np.stack([np.bincount(r, minlength=256) for r in flat])
     assert np.array_equal(_histograms(torch.from_numpy(flat).to(device)).cpu().numpy(), ref)
+
+
+def test_unbatched_input_and_subclasses():
+    torch.manual_seed(0)
+    conv = nn.Conv3d(2, 3, 3, padding=1).double()
+    x = torch.randn(2, 5, 6, 7, dtype=torch.float64)            # [C, D, H, W]
+    with torch.no_grad():
+        assert torch.allclose(Conv3dAs2d(conv)(x), conv(x), rtol=1e-10, atol=1e-10)
+
+    class Custom(nn.Conv3d):                                     # its own forward must survive
+        def forward(self, x):
+            return super().forward(x) * 2
+
+    model = nn.Sequential(Custom(1, 1, 3))
+    assert conv3d_as_conv2d(model) == 0 and type(model[0]) is Custom
+
+
+def test_auto_says_when_it_falls_back_to_the_cpu(monkeypatch, caplog):
+    from inksweep.sweep import resolve_device
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+    with caplog.at_level("WARNING", logger="inksweep"):
+        assert resolve_device("auto") == "cpu"
+    assert "no CUDA or Apple GPU" in caplog.text

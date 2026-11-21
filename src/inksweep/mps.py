@@ -26,6 +26,8 @@ class Conv3dAs2d(nn.Module):
         self.bias = conv.bias
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 4:  # unbatched [C, D, H, W], as nn.Conv3d accepts
+            return self.forward(x[None])[0]
         b, c = x.shape[:2]
         if self.pd:
             x = F.pad(x, (0, 0, 0, 0, self.pd, self.pd))
@@ -46,7 +48,7 @@ def conv3d_as_conv2d(model: nn.Module) -> int:
     """Swap every eligible ``nn.Conv3d`` in ``model`` for :class:`Conv3dAs2d` in place; returns how many."""
     n = 0
     for name, child in list(model.named_children()):
-        if (isinstance(child, nn.Conv3d) and child.groups == 1 and child.padding_mode == "zeros"
+        if (type(child) is nn.Conv3d and child.groups == 1 and child.padding_mode == "zeros"
                 and isinstance(child.padding, tuple)):
             setattr(model, name, Conv3dAs2d(child))
             n += 1
